@@ -120,5 +120,131 @@
     });
   });
 
+  // Lead popup (homepage only: does nothing unless #lead-modal exists)
+  var lm = $('#lead-modal');
+  if (lm) {
+    var LEAD = { wa: '918707470994', email: 'info@esrcorporateconsultants.com', source: 'ESR Website Contact Popup', site: 'esrcorp.in', key: 'esrLeadPopupShown' };
+    var lmPanel = $('.lm-panel', lm), lmForm = $('#lead-form'), formView = $('#lead-form-view'), okView = $('#lead-ok-view');
+    var lmClose = $('#lead-close'), waBtn = $('#lead-wa'), mailBtn = $('#lead-mail'), editBtn = $('#lead-edit'), okTitle = $('#lead-ok-title');
+    var F = { name: $('#lead-name'), mobile: $('#lead-mobile'), email: $('#lead-email'), service: $('#lead-service'), message: $('#lead-message') };
+    var lastFocus = null, memSeen = false, armed = false;
+
+    var seen = function () { try { return sessionStorage.getItem(LEAD.key) === '1'; } catch (e) { return memSeen; } };
+    var markSeen = function () { memSeen = true; try { sessionStorage.setItem(LEAD.key, '1'); } catch (e) { /* storage unavailable */ } };
+
+    var showView = function (ok) {
+      formView.hidden = ok; okView.hidden = !ok;
+      lmPanel.setAttribute('aria-labelledby', ok ? 'lead-ok-title' : 'lead-title');
+      lmPanel.setAttribute('aria-describedby', ok ? 'lead-ok-sub' : 'lead-sub');
+    };
+    var openModal = function () {
+      if (lm.classList.contains('open')) return;
+      lastFocus = document.activeElement;
+      var sw = window.innerWidth - document.documentElement.clientWidth;
+      if (sw > 0) document.body.style.paddingRight = sw + 'px';
+      document.documentElement.classList.add('lm-lock');
+      lm.classList.add('open'); lm.setAttribute('aria-hidden', 'false');
+      lmPanel.scrollTop = 0;
+      lmPanel.focus({ preventScroll: true });
+    };
+    var closeModal = function () {
+      if (!lm.classList.contains('open')) return;
+      lm.classList.remove('open'); lm.setAttribute('aria-hidden', 'true');
+      document.documentElement.classList.remove('lm-lock'); document.body.style.paddingRight = '';
+      if (lastFocus && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
+    };
+
+    // First meaningful scroll opens the popup once per browser session
+    if (!seen()) {
+      var arm = function () { setTimeout(function () { armed = true; }, 600); };
+      if (document.readyState === 'complete') arm(); else window.addEventListener('load', arm);
+      var onFirstScroll = function () {
+        if (!armed || window.scrollY < 120) return;
+        if (nav && nav.classList.contains('open')) return;
+        window.removeEventListener('scroll', onFirstScroll);
+        markSeen(); openModal();
+      };
+      window.addEventListener('scroll', onFirstScroll, { passive: true });
+    }
+
+    lmClose.addEventListener('click', closeModal);
+    lm.addEventListener('mousedown', function (e) { if (e.target === lm) closeModal(); });
+    document.addEventListener('keydown', function (e) {
+      if (!lm.classList.contains('open')) return;
+      if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+      if (e.key !== 'Tab') return;
+      var f = $$('a[href], button:not([disabled]), input, select, textarea', lmPanel).filter(function (el) { return !el.closest('[hidden]'); });
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1], a = document.activeElement;
+      if (e.shiftKey && (a === first || a === lmPanel)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+    });
+
+    // Validation
+    var normMobile = function (v) {
+      var d = v.replace(/[\s\-().]/g, '');
+      if (/^\+91/.test(d)) d = d.slice(3);
+      else if (/^0091/.test(d)) d = d.slice(4);
+      else if (/^91\d{10}$/.test(d)) d = d.slice(2);
+      else if (/^0\d{10}$/.test(d)) d = d.slice(1);
+      return /^[6-9]\d{9}$/.test(d) ? d : null;
+    };
+    var setErr = function (key, msg) {
+      var box = F[key].closest('.lm-f'), out = $('#lead-' + key + '-err');
+      if (out) out.textContent = msg || '';
+      box.classList.toggle('bad', !!msg);
+      if (msg) F[key].setAttribute('aria-invalid', 'true'); else F[key].removeAttribute('aria-invalid');
+    };
+    var validate = function () {
+      var bad = [], v;
+      v = F.name.value.trim();
+      if (!v) { setErr('name', 'Please enter your full name.'); bad.push('name'); }
+      else if (!/^[\p{L}][\p{L}\p{N} .,&'’-]+$/u.test(v)) { setErr('name', 'Please enter a valid name.'); bad.push('name'); }
+      else setErr('name');
+      v = F.mobile.value.trim();
+      if (!v) { setErr('mobile', 'Please enter your mobile number.'); bad.push('mobile'); }
+      else if (!normMobile(v)) { setErr('mobile', 'Enter a valid 10-digit Indian mobile number.'); bad.push('mobile'); }
+      else setErr('mobile');
+      v = F.email.value.trim();
+      if (!v) { setErr('email', 'Please enter your email address.'); bad.push('email'); }
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { setErr('email', 'Enter a valid email address.'); bad.push('email'); }
+      else setErr('email');
+      if (!F.service.value) { setErr('service', 'Please select the service you need.'); bad.push('service'); }
+      else setErr('service');
+      return bad;
+    };
+    ['name', 'mobile', 'email', 'service'].forEach(function (k) {
+      F[k].addEventListener(k === 'service' ? 'change' : 'input', function () { setErr(k); });
+    });
+
+    // Build lead messages from the actual form values
+    var lead = function () {
+      var m = F.message.value.trim();
+      return { name: F.name.value.trim(), mobile: '+91 ' + normMobile(F.mobile.value.trim()), email: F.email.value.trim(), service: F.service.value, message: m || 'Not specified' };
+    };
+    var waUrl = function (d) {
+      var t = 'Hello ESR Corporate Consultants LLP,\n\nI would like to enquire about your services.\n\n' +
+        'Name: ' + d.name + '\nMobile: ' + d.mobile + '\nEmail: ' + d.email + '\nService Required: ' + d.service + '\nRequirement: ' + d.message +
+        '\n\nSource: ' + LEAD.source + '\n\nPlease get back to me.';
+      return 'https://wa.me/' + LEAD.wa + '?text=' + encodeURIComponent(t);
+    };
+    var mailUrl = function (d) {
+      var b = 'ESR CORPORATE CONSULTANTS LLP\r\n\r\nNew Website Enquiry\r\n\r\n' +
+        'Name: ' + d.name + '\r\nMobile: ' + d.mobile + '\r\nEmail: ' + d.email + '\r\nService Required: ' + d.service +
+        '\r\n\r\nRequirement:\r\n' + d.message + '\r\n\r\nSource:\r\n' + LEAD.source + '\r\n\r\nWebsite:\r\n' + LEAD.site;
+      return 'mailto:' + LEAD.email + '?subject=' + encodeURIComponent('New Website Enquiry - ' + d.service) + '&body=' + encodeURIComponent(b);
+    };
+
+    lmForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var bad = validate();
+      if (bad.length) { F[bad[0]].focus(); return; }
+      var d = lead();
+      waBtn.href = waUrl(d); mailBtn.href = mailUrl(d);
+      showView(true); lmPanel.scrollTop = 0; okTitle.focus({ preventScroll: true });
+    });
+    editBtn.addEventListener('click', function () { showView(false); F.name.focus(); });
+  }
+
   var yr = $('#yr'); if (yr) yr.textContent = new Date().getFullYear();
 })();
